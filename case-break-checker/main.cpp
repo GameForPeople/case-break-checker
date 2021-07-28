@@ -4,23 +4,24 @@
 		github.com/GameForPeople
 */
 
-static constexpr bool FOR_NEO = true; 
+static constexpr bool FOR_L2SERVER = true;
 
 #include "WonSY.h"
 
 #include <thread>
 #include <vector>
 #include <queue>
+#include <mutex>
 
 #ifndef WONSY_CPP_20
-	static_assert( false, "min cpp20" );
+	static_assert( false, "need cpp20" );
 #endif
 
 int main( int argc, char *argv[] )
 {
-	// 테스트
+	// 테스트 코드
 	{
-		if constexpr ( false ) 
+		if constexpr ( false )
 		{
 			return 1;
 		}
@@ -29,7 +30,7 @@ int main( int argc, char *argv[] )
 	// UI 출력
 	{
 		std::cout << ""                                                     << std::endl;
-		std::cout << "Case-Break-Checker ver 0.1"                           << std::endl; 
+		std::cout << "Case-Break-Checker ver 0.1"                           << std::endl;
 		std::cout << "Copyright 2021, Won Seong-Yeon. All Rights Reserved." << std::endl;
 		std::cout << "		KoreaGameMaker@gmail.com"                       << std::endl;
 		std::cout << "		github.com/GameForPeople"                       << std::endl;
@@ -39,27 +40,36 @@ int main( int argc, char *argv[] )
 	}
 
 	// 명령형 인수에 따라, 적법한 프로젝트 경로를 구합니다.
-	const auto rootPath = [ argc, &argv ]() -> std::filesystem::path
+	const auto rootPathCont = [ argc, &argv ]() mutable -> std::vector < std::filesystem::path >
 		{
 			if ( argc < 2 )
 			{
-				argv[ 1 ] = (char *)("test/");
+				argc      = 2;
+				argv[ 1 ] = (char *)("../../../Source");
 				NOTICE_LOG( "주어진 명령형 인수가 없어, 하드 코딩된 default 경로를 사용하였습니다." );
 			}
 
-			const std::filesystem::path retPath{ static_cast< std::string >( argv[ 1 ] ) };
+			std::vector < std::filesystem::path > retPathCont;
+			retPathCont.reserve( argc - 1 );
 
-			// 소스 링크 검사
-			if ( !std::filesystem::exists( retPath ) )
+			for ( int pathCount = 1; pathCount < argc; ++pathCount )
 			{
-				ERROR_LOG( "해당 경로가 유효하지 않아 종료합니다. : " + retPath.generic_string() );
+				const std::filesystem::path tempPath{ static_cast< std::string >( argv[ pathCount ] ) };
+
+				// 소스 링크 검사
+				if ( !std::filesystem::exists( tempPath ) )
+				{
+					ERROR_LOG( "해당 경로가 유효하지 않아 종료합니다. : " + tempPath.generic_string() );
+				}
+
+				retPathCont.emplace_back( tempPath );
 			}
 			
-			return retPath;
+			return retPathCont;
 		}();
 
-	// 멀티쓰레드 해야지?
-	const auto threadCount = static_cast< int >( std::thread::hardware_concurrency() );
+	// 멀티쓰레드 해야지? -> 오잉 안써도 생각보다 안느린데?
+	const auto threadCount = 1; //static_cast< int >( std::thread::hardware_concurrency() );
 	NOTICE_LOG( "hardware_concurrency is : " + std::to_string( threadCount ) );
 
 	std::vector< std::queue< std::filesystem::path > > pathCont;
@@ -70,30 +80,35 @@ int main( int argc, char *argv[] )
 		NOTICE_LOG( "parsing start!");
 
 		auto contIndex = 0;
+		auto pathCount = static_cast< unsigned long long >( 0 );
 
-		for ( const auto& pathIter : std::filesystem::recursive_directory_iterator( rootPath ) )
+		for ( const auto& rootPath : rootPathCont )
 		{
-			if ( pathIter.is_regular_file() ) LIKELY
+			for ( const auto& pathIter : std::filesystem::recursive_directory_iterator( rootPath ) )
 			{
-				if ( 
-					pathIter.path().extension().generic_string() == ".cpp" ||
-					pathIter.path().extension().generic_string() == ".h"   ) LIKELY
+				if ( pathIter.is_regular_file() ) LIKELY
 				{
-					if constexpr ( FOR_NEO )
+					if (
+						pathIter.path().extension().generic_string() == ".cpp" ||
+						pathIter.path().extension().generic_string() == ".h"   ) LIKELY
 					{
-						if ( pathIter.path().filename().generic_string().find( "template" ) != std::string::npos )
-							continue;
+						if constexpr ( FOR_L2SERVER )
+						{
+							if ( pathIter.path().filename().generic_string().find( "template" ) != std::string::npos )
+								continue;
+						}
+
+						++pathCount;
+						pathCont[ contIndex++ ].push( pathIter.path() );
+
+						if ( contIndex == pathCont.size() ) UNLIKELY
+							contIndex = 0;
 					}
-
-					pathCont[ contIndex++ ].push( pathIter.path() );
-
-					if ( contIndex == pathCont.size() ) UNLIKELY
-						contIndex = 0;
 				}
 			}
 		}
 
-		NOTICE_LOG( "parsing end!");
+		NOTICE_LOG( "parsing end! total file count : " + std::to_string( pathCount ) );
 	}
 
 	// 각각의 쓰레드에서 자신이 할당받은 파일들에 대하여, 검사합니다.
@@ -101,13 +116,14 @@ int main( int argc, char *argv[] )
 		NOTICE_LOG( "check start!");
 
 		std::vector< std::thread > threadCont;
+		std::mutex                 logLock;
 		threadCont.reserve( threadCount );
 
 		for ( int index = 0; index < threadCount; ++index )
 		{
-			threadCont.emplace_back( 
-				static_cast< std::thread >( 
-					[ index, &pathCont ]()
+			threadCont.emplace_back(
+				static_cast< std::thread >(
+					[ index, &pathCont, &logLock ]()
 					{
 						auto& localPathCont = pathCont[ index ];
 						
@@ -116,78 +132,183 @@ int main( int argc, char *argv[] )
 							WonSY::File::WsyFileReader checkFile( localPathCont.front(), WonSY::File::READ_MODE::NONE );
 							localPathCont.pop();
 
-							//bool isReadedSwitch   = false; // "switch" 를 읽었는지 여부
-							bool isReadedCase     = false; // "case" 를 읽었는지 여부 
-							bool isPrevReadedCase = false; // "case" 를 바로 이전에 읽었는지 여부 
+							bool isReadedCase     = false; // "case" 를 읽었는지 여부
+							bool isPrevReadedCase = false; // "case" 를 바로 이전에 읽었는지 여부
+							bool isExistSwitch    = false; // "switch" 가 해당파일에 존재했었는지 여부
+							bool isOnComment      = false; // 주석 상태인지 여부 체크
 
-							for ( const auto getResult = checkFile.GetNextLine(); getResult.has_value(); )
+							while ( 7 )
 							{
-								const auto& line = *getResult;
-
-								if ( !isReadedCase ) LIKELY
+								if ( const auto getResult = checkFile.GetNextLine();
+									false == getResult.has_value() )
 								{
-									if ( line.find( "case" ) != std::string::npos )
-									{
-										isReadedCase     = true;
-										isPrevReadedCase = true;
-									}
-
-									// 같은 줄에 break 배치 시, 바로 푼다.
-									if ( 
-										line.find( "break" ) != std::string::npos || 
-										line.find( "return" ) != std::string::npos )
-									{
-										isReadedCase     = false;
-										isPrevReadedCase = false;
-									}
+									break;
 								}
-								else if ( isReadedCase ) UNLIKELY
+								else
 								{
-									// 바로 이전행이 case가 존재했고,
-									if ( isPrevReadedCase )
+									const auto& line = *getResult;
+
+									// 해당 라인이 주석 상황인지 체크합니다.
 									{
-										if ( line.find( "case" ) != std::string::npos )
+										if ( !isOnComment ) LIKELY
 										{
-											isReadedCase     = true;
-											isPrevReadedCase = true;
+											if ( line.find( "/*" ) != std::string::npos ) UNLIKELY
+											{
+												isOnComment = true;
+											}
+
+											if ( line.find( "*/" ) != std::string::npos ) UNLIKELY
+											{
+												isOnComment = false;
+											}
 										}
-										// 같은 줄에 break 배치 시, 바로 푼다.
-										else if ( 
-											line.find( "break" ) != std::string::npos || 
-											line.find( "return" ) != std::string::npos )
+
+										if ( isOnComment ) UNLIKELY
+											continue;
+									}
+
+									std::string deepCopyString = line;
+									WonSY::File::EraseFirstTab( deepCopyString );
+									const auto tokenCont = WonSY::File::DoTokenize( deepCopyString, ' ' );
+
+									// 빈칸 일 시, 주석일 시, 전처리기 일 시 등의 여부를 확인하여 넘깁니다.
+									{
+										if ( !tokenCont.size() ) UNLIKELY
 										{
-											isReadedCase     = false;
-											isPrevReadedCase = false;
+											// 빈칸만 있을 경우 제거해줍니다.
+											continue;
 										}
-										else
+										else if ( tokenCont[ 0 ].size() > 1 && tokenCont[ 0 ][ 0 ] == '/' && tokenCont[ 0 ][ 1 ] == '/' ) UNLIKELY
 										{
-											isPrevReadedCase = false;
+											// 앞부분의 탭과 공백을 모두 제거한 이후, 첫번쨰 글자를 확인하여, 주석인지 여부를 체크합니다.
+											continue;
+										}
+										else if ( tokenCont[ 0 ].size() > 1 && tokenCont[ 0 ][ 0 ] == '#' ) UNLIKELY
+										{
+											// 전처리기 지시자를 제거해줍니다. ( #ifdef, #endif )
+											continue;
 										}
 									}
-									else
-									{
-										if ( 
-											line.find( "case" ) != std::string::npos    ||
-											line.find( "default" ) != std::string::npos )
-										{
-											WARN_LOG( " Switch - Case 문의 확인이 필요합니다.  [ File : " + 
-												checkFile.GetFileName() + ", Line : " + std::to_string( checkFile.GetCurLineIndex() ) );
 
-											isReadedCase     = false;
-											isPrevReadedCase = false;
-										}
-										else if ( line.find( "switch" ) != std::string::npos )
+									// 해당 파일에 Switch가 존재했었는지 여부를 확인합니다.
+									{
+										if ( !isExistSwitch ) LIKELY
 										{
-											// 하나의 파일에서의 여러 switch문에서, 이전 switch문의 마지막case에 return이나 break가 없을떄.
-											isReadedCase     = false;
-											isPrevReadedCase = false;
+											if ( WonSY::File::FindString( tokenCont, "switch" ) ) LIKELY
+											{
+												continue;
+											}
+											else UNLIKELY
+											{
+												isExistSwitch = true;
+												continue;
+											}
 										}
-										// 마지막 case는 이후 break나 return이 없더라도 큰 문제가 되지 않는다.
+									}
+
+									// case를 탐색하고, break - return 등을 확인하여 처리한다.
+									{
+										if ( !isReadedCase ) LIKELY
+										{
+											if ( WonSY::File::FindString( tokenCont, "case" ) )
+											{
+												isReadedCase     = true;
+												isPrevReadedCase = true;
+											}
+
+											// 같은 줄에 바로 break, retunr 등 배치 시, 바로 푼다.
+											if (
+												line.find( "break;" ) != std::string::npos ||
+												line.find( "return" ) != std::string::npos ||
+												line.find( "fallthrough" ) != std::string::npos ) UNLIKELY
+											{
+												// ex ) case 1: ~~~~~~ breal;
+												isReadedCase     = false;
+												isPrevReadedCase = false;
+											}
+											if constexpr ( FOR_L2SERVER )
+											{
+												if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
+												{
+													isReadedCase     = false;
+													isPrevReadedCase = false;
+												}
+											}
+										}
+										else if ( isReadedCase && isPrevReadedCase ) UNLIKELY
+										{
+											// Case를 읽은 후 바로 다음줄을 처리하여줍니다.
+
+											if ( WonSY::File::FindString( tokenCont, "case" ) )
+											{
+												// ex ) case 1:
+												//      case 2:
+												//      case 3:
+												isReadedCase     = true;
+												isPrevReadedCase = true;
+											}
+											else if (
+												line.find( "break;" ) != std::string::npos ||
+												line.find( "return" ) != std::string::npos ||
+												line.find( "switch" ) != std::string::npos ||
+												line.find( "fallthrough" ) != std::string::npos ) UNLIKELY
+											{
+												isReadedCase     = false;
+												isPrevReadedCase = false;
+											}
+											else
+											{
+												if constexpr ( FOR_L2SERVER )
+												{
+													if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
+													{
+														isReadedCase     = false;
+														isPrevReadedCase = false;
+													}
+												}
+
+												isPrevReadedCase = false;
+											}
+										}
+										else if ( isReadedCase && !isPrevReadedCase ) UNLIKELY
+										{
+											if (
+												line.find( "break;" ) != std::string::npos ||
+												line.find( "return" ) != std::string::npos ||
+												line.find( "switch" ) != std::string::npos ||
+												line.find( "fallthrough" ) != std::string::npos )
+											{
+												isReadedCase     = false;
+												isPrevReadedCase = false;
+											}
+											else if (
+												WonSY::File::FindString( tokenCont, "case" )     ||
+												line.find( "default:" ) != std::string::npos     )
+											{
+												logLock.lock();  //=========================
+												WARN_LOG( " 확인이 필요합니다.  [ File : " +
+													checkFile.GetFileName() + ", Line : " + std::to_string( checkFile.GetCurLineIndex() ) );
+												logLock.unlock();//=========================
+
+												isReadedCase     = false;
+												isPrevReadedCase = false;
+											}
+
+											// 마지막 case는 이후 break나 return이 없더라도 큰 문제가 되지 않는다고 판단하였습니다.
+
+											if constexpr ( FOR_L2SERVER )
+											{
+												if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
+												{
+													isReadedCase     = false;
+													isPrevReadedCase = false;
+												}
+											}
+										}
 									}
 								}
 							}
 						}
-
 					} ) );
 		}
 
@@ -197,5 +318,5 @@ int main( int argc, char *argv[] )
 		NOTICE_LOG( "check end! bye bye!");
 	}
 
-	std::system( "PAUSE" );
+	// std::system( "PAUSE" );
 }

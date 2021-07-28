@@ -47,7 +47,7 @@ namespace WonSY::File
 		: public BaseFile
 	{
 	public:
-		WsyFileReader( 
+		WsyFileReader(
 			const std::filesystem::path& filePathString,
 			const READ_MODE              readMode = READ_MODE::NONE );
 
@@ -77,4 +77,10 @@ namespace WonSY::File
 
 		virtual int GetCurLineIndex() final { return 0; };
 	};
+
+	bool FindString( const std::vector< std::string >& cont, const std::string& checkString );
+
+	void EraseFirstTab( std::string& retString );
+
+	std::vector< std::string > DoTokenize( const std::string& stringValue, const char delimiter = ' ' );
 }

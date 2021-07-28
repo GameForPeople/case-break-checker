@@ -127,4 +127,43 @@ namespace WonSY::File
 	}
 
 #pragma endregion
+
+#pragma region [Others]
+
+	bool FindString( const std::vector< std::string >& cont, const std::string& checkString )
+	{
+		for ( const auto& ele : cont )
+		{
+			if ( ele == checkString )
+				return true;
+		}
+
+		return false;
+	}
+
+	void EraseFirstTab( std::string& retString )
+	{
+		FIRST:
+		if ( retString.size() && retString[ 0 ] == '\t' )
+		{
+			retString.erase( retString.begin() );
+			goto FIRST;
+		}
+	}
+
+	// "delimiter"를 기준으로 토크나이즈한 결과를 리턴한다.
+	std::vector< std::string > DoTokenize( const std::string& stringValue, const char delimiter /* = ',' */ )
+	{
+		std::vector< std::string > retCont;
+		std::string                token;
+		std::stringstream          stringStream( stringValue );
+
+		while ( std::getline( stringStream, token, delimiter ) )
+		{
+			retCont.emplace_back( token );
+		}
+
+		return retCont;
+	}
+#pragma endregion
 }
