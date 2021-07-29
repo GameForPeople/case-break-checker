@@ -74,25 +74,33 @@
     <LinkIncremental>true</LinkIncremental>
     <SourcePath>$(VC_SourcePath);</SourcePath>
     <ReferencePath>$(ReferencePath)</ReferencePath>
-    <IncludePath>C:\Users\WonSY\source\repos\case-break-checker\WonSY;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\WonSY;$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)</OutDir>
+    <IntDir>$(SolutionDir)\eraseOK\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <SourcePath>$(VC_SourcePath);</SourcePath>
     <ReferencePath>$(ReferencePath)</ReferencePath>
-    <IncludePath>C:\Users\WonSY\source\repos\case-break-checker\WonSY;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\WonSY;$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)</OutDir>
+    <IntDir>$(SolutionDir)\eraseOK\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <SourcePath>$(VC_SourcePath);</SourcePath>
     <ReferencePath>$(ReferencePath)</ReferencePath>
-    <IncludePath>C:\Users\WonSY\source\repos\case-break-checker\WonSY;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\WonSY;$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)</OutDir>
+    <IntDir>$(SolutionDir)\eraseOK\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <SourcePath>$(VC_SourcePath);</SourcePath>
     <ReferencePath>$(ReferencePath)</ReferencePath>
-    <IncludePath>C:\Users\WonSY\source\repos\case-break-checker\WonSY;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\WonSY;$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)</OutDir>
+    <IntDir>$(SolutionDir)\eraseOK\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

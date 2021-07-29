@@ -45,7 +45,7 @@ int main( int argc, char *argv[] )
 			if ( argc < 2 )
 			{
 				argc      = 2;
-				argv[ 1 ] = (char *)("../../../Source");
+				argv[ 1 ] = (char *)("test/");
 				NOTICE_LOG( "주어진 명령형 인수가 없어, 하드 코딩된 default 경로를 사용하였습니다." );
 			}
 
@@ -68,22 +68,24 @@ int main( int argc, char *argv[] )
 			return retPathCont;
 		}();
 
-	// 멀티쓰레드 해야지? -> 오잉 안써도 생각보다 안느린데?
-	const auto threadCount = 1; //static_cast< int >( std::thread::hardware_concurrency() );
+	// 멀티쓰레드 해야지?
+	const auto threadCount = static_cast< int >( std::thread::hardware_concurrency() );
 	NOTICE_LOG( "hardware_concurrency is : " + std::to_string( threadCount ) );
 
 	std::vector< std::queue< std::filesystem::path > > pathCont;
+	std::vector< std::queue< std::string > >           logCont;
 	pathCont.resize( threadCount );
+	logCont.resize( threadCount );
 
 	// 일단은 단일 쓰레드에서, 파일을 돌아다니면서, 모든 소스파일을 찾아 넣습니다.
 	{
-		NOTICE_LOG( "parsing start!");
-
 		auto contIndex = 0;
 		auto pathCount = static_cast< unsigned long long >( 0 );
 
 		for ( const auto& rootPath : rootPathCont )
 		{
+			NOTICE_LOG( "parsing : " + rootPath.generic_string() );
+
 			for ( const auto& pathIter : std::filesystem::recursive_directory_iterator( rootPath ) )
 			{
 				if ( pathIter.is_regular_file() ) LIKELY
@@ -113,19 +115,19 @@ int main( int argc, char *argv[] )
 
 	// 각각의 쓰레드에서 자신이 할당받은 파일들에 대하여, 검사합니다.
 	{
-		NOTICE_LOG( "check start!");
+		NOTICE_LOG( "check start! ");
 
 		std::vector< std::thread > threadCont;
-		std::mutex                 logLock;
 		threadCont.reserve( threadCount );
 
 		for ( int index = 0; index < threadCount; ++index )
 		{
 			threadCont.emplace_back(
 				static_cast< std::thread >(
-					[ index, &pathCont, &logLock ]()
+					[ index, &pathCont, &logCont ]()
 					{
 						auto& localPathCont = pathCont[ index ];
+						auto& localLogCont  = logCont[ index ];
 						
 						while ( !localPathCont.empty() )
 						{
@@ -285,17 +287,14 @@ int main( int argc, char *argv[] )
 												WonSY::File::FindString( tokenCont, "case" )     ||
 												line.find( "default:" ) != std::string::npos     )
 											{
-												logLock.lock();  //=========================
-												WARN_LOG( " 확인이 필요합니다.  [ File : " +
-													checkFile.GetFileName() + ", Line : " + std::to_string( checkFile.GetCurLineIndex() ) );
-												logLock.unlock();//=========================
+												localLogCont.emplace( " Plz Check!!  [ File : " +
+													checkFile.GetFileName() + ", Line : " + std::to_string( checkFile.GetCurLineIndex() ) + " ]" );
 
 												isReadedCase     = false;
 												isPrevReadedCase = false;
 											}
 
 											// 마지막 case는 이후 break나 return이 없더라도 큰 문제가 되지 않는다고 판단하였습니다.
-
 											if constexpr ( FOR_L2SERVER )
 											{
 												if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
@@ -314,6 +313,15 @@ int main( int argc, char *argv[] )
 
 		for ( auto& th : threadCont )
 			th.join();
+
+		for ( auto& ele : logCont )
+		{
+			while ( !ele.empty() )
+			{
+				WARN_LOG( ele.front() );
+				ele.pop();
+			}
+		}
 
 		NOTICE_LOG( "check end! bye bye!");
 	}
