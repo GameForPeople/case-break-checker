@@ -4,6 +4,15 @@
 		github.com/GameForPeople
 */
 
+/*
+	swtich-case 구문에서, break가 누락되는 경우를 확인합니다.
+
+	다만 if-else 등의 분기 내에서 한 곳의 break 시 등의 경우는 아직...(그리고 영원히..) 탐색하지 못할 듯 보입니다.
+	단순 break 누락 검사용으로 사용부탁드립니다.
+
+	감사합니다.
+*/
+
 static constexpr bool FOR_L2SERVER = true;
 
 #include "WonSY.h"
