@@ -165,5 +165,24 @@ namespace WonSY::File
 
 		return retCont;
 	}
+
+	void Replace( std::string& targetString, const std::string& oldString, const std::string& newString /* == ""*/ )
+	{
+		// 으악 잘못하면 무한 루프에요!
+
+		size_t index = 0;
+
+		HEAD:
+		if ( index = targetString.find( oldString, index + 1 );
+			index != std::string::npos )
+		{
+			targetString.erase( index, oldString.size() );
+
+			if ( newString.size() )
+				targetString.insert( index, newString );
+
+			goto HEAD;
+		}
+	}
 #pragma endregion
 }

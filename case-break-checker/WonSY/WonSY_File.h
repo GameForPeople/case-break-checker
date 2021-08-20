@@ -83,4 +83,19 @@ namespace WonSY::File
 	void EraseFirstTab( std::string& retString );
 
 	std::vector< std::string > DoTokenize( const std::string& stringValue, const char delimiter = ' ' );
+
+	void Replace( std::string& targetString, const std::string& oldString, const std::string& newString = "" );
+
+	template < typename _Type >
+	using _ValueType = _Type::value_type;
+
+	template< typename _Cont >
+	auto FindAndErase( _Cont& cont, const _ValueType< _Cont >& checkValue ) -> void
+	{
+		for ( int rIndex = cont.size() - 1; rIndex >= 0; --rIndex )
+		{
+			if ( cont[ rIndex ] == checkValue )
+				cont.erase( cont.begin() + rIndex );
+		}
+	}
 }

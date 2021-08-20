@@ -20,7 +20,8 @@ static constexpr bool FOR_L2SERVER = true;
 #include <thread>
 #include <vector>
 #include <queue>
-#include <mutex>
+#include <stack>
+// #include <mutex>
 
 #ifndef WONSY_CPP_20
 	static_assert( false, "need cpp20" );
@@ -39,7 +40,7 @@ int main( int argc, char *argv[] )
 	// UI 출력
 	{
 		std::cout << ""                                                     << std::endl;
-		std::cout << "Case-Break-Checker ver 0.1"                           << std::endl;
+		std::cout << "Case-Break-Checker ver 0.2"                           << std::endl;
 		std::cout << "Copyright 2021, Won Seong-Yeon. All Rights Reserved." << std::endl;
 		std::cout << "		KoreaGameMaker@gmail.com"                       << std::endl;
 		std::cout << "		github.com/GameForPeople"                       << std::endl;
@@ -143,10 +144,21 @@ int main( int argc, char *argv[] )
 							WonSY::File::WsyFileReader checkFile( localPathCont.front(), WonSY::File::READ_MODE::NONE );
 							localPathCont.pop();
 
-							bool isReadedCase     = false; // "case" 를 읽었는지 여부
-							bool isPrevReadedCase = false; // "case" 를 바로 이전에 읽었는지 여부
-							bool isExistSwitch    = false; // "switch" 가 해당파일에 존재했었는지 여부
-							bool isOnComment      = false; // 주석 상태인지 여부 체크
+							enum class READ_STATE
+							{
+								BEFORE_CASE,        // CASE 읽기 전
+								AFTER_CASE_DIRECT,  // CASE 읽은 직후 ~ 다음 라인까지
+								AFTER_CASE,         // CASE 읽고 다다음 라인 부터, Break, Return 등의 문자 나오기 전까지. 
+							};
+
+							// after Check
+							bool       isExistSwitch = false; // "switch" 가 해당파일에 존재했었는지 여부
+							bool       isOnComment   = false; // 주석 상태인지 여부 체크
+
+							// Check
+							READ_STATE                                 readState  = READ_STATE::BEFORE_CASE;
+							// int                                        depthLevel = 0; // 뎁스
+							// std::stack< std::pair< READ_STATE, int > > stateCont;      // 이중 Switch문 처리.
 
 							while ( 7 )
 							{
@@ -159,7 +171,7 @@ int main( int argc, char *argv[] )
 								{
 									const auto& line = *getResult;
 
-									// 해당 라인이 주석 상황인지 체크합니다.
+									// 해당 라인이 주석인지 체크합니다.
 									{
 										if ( !isOnComment ) LIKELY
 										{
@@ -180,7 +192,10 @@ int main( int argc, char *argv[] )
 
 									std::string deepCopyString = line;
 									WonSY::File::EraseFirstTab( deepCopyString );
+									WonSY::File::Replace( deepCopyString, "\t", " " );
 									const auto tokenCont = WonSY::File::DoTokenize( deepCopyString, ' ' );
+									WonSY::File::FindAndErase( tokenCont, "" );
+									WonSY::File::FindAndErase( tokenCont, " " );
 
 									// 빈칸 일 시, 주석일 시, 전처리기 일 시 등의 여부를 확인하여 넘깁니다.
 									{
@@ -201,7 +216,7 @@ int main( int argc, char *argv[] )
 										}
 									}
 
-									// 해당 파일에 Switch가 존재했었는지 여부를 확인합니다.
+									// 현재 파일에서 지금까지, Switch가 존재했었는지 여부를 확인합니다.
 									{
 										if ( !isExistSwitch ) LIKELY
 										{
@@ -219,44 +234,44 @@ int main( int argc, char *argv[] )
 
 									// case를 탐색하고, break - return 등을 확인하여 처리한다.
 									{
-										if ( !isReadedCase ) LIKELY
+										if ( READ_STATE::BEFORE_CASE == readState ) LIKELY
 										{
 											if ( WonSY::File::FindString( tokenCont, "case" ) )
 											{
-												isReadedCase     = true;
-												isPrevReadedCase = true;
+												readState = READ_STATE::AFTER_CASE_DIRECT;
 											}
 
-											// 같은 줄에 바로 break, retunr 등 배치 시, 바로 푼다.
+											// 같은 줄에 바로 break, return 등 배치 시, 바로 푼다.
 											if (
 												line.find( "break;" ) != std::string::npos ||
 												line.find( "return" ) != std::string::npos ||
 												line.find( "fallthrough" ) != std::string::npos ) UNLIKELY
 											{
-												// ex ) case 1: ~~~~~~ breal;
-												isReadedCase     = false;
-												isPrevReadedCase = false;
+												// ex ) case 1: ~~~~~~ break; or case 2: ~~~~~~ return;
+												readState = READ_STATE::BEFORE_CASE;
 											}
+
 											if constexpr ( FOR_L2SERVER )
 											{
-												if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
+												// 회사 전용 매크로
+												if (
+													line.find( "PROCESS_STAT_VALUE" ) != std::string::npos ) UNLIKELY
 												{
-													isReadedCase     = false;
-													isPrevReadedCase = false;
+													readState = READ_STATE::BEFORE_CASE;
 												}
 											}
 										}
-										else if ( isReadedCase && isPrevReadedCase ) UNLIKELY
+										else if ( READ_STATE::AFTER_CASE_DIRECT == readState ) UNLIKELY
 										{
 											// Case를 읽은 후 바로 다음줄을 처리하여줍니다.
 
-											if ( WonSY::File::FindString( tokenCont, "case" ) )
+											if ( WonSY::File::FindString( tokenCont, "case" ) ) UNLIKELY
 											{
 												// ex ) case 1:
 												//      case 2:
 												//      case 3:
-												isReadedCase     = true;
-												isPrevReadedCase = true;
+
+												readState = READ_STATE::AFTER_CASE_DIRECT;
 											}
 											else if (
 												line.find( "break;" ) != std::string::npos ||
@@ -264,24 +279,23 @@ int main( int argc, char *argv[] )
 												line.find( "switch" ) != std::string::npos ||
 												line.find( "fallthrough" ) != std::string::npos ) UNLIKELY
 											{
-												isReadedCase     = false;
-												isPrevReadedCase = false;
+												readState = READ_STATE::BEFORE_CASE;
 											}
 											else
 											{
+												readState = READ_STATE::AFTER_CASE;
+												
 												if constexpr ( FOR_L2SERVER )
 												{
-													if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
+													if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos ) UNLIKELY
 													{
-														isReadedCase     = false;
-														isPrevReadedCase = false;
+														readState == READ_STATE::BEFORE_CASE;
+														continue;
 													}
 												}
-
-												isPrevReadedCase = false;
 											}
 										}
-										else if ( isReadedCase && !isPrevReadedCase ) UNLIKELY
+										else if ( READ_STATE::AFTER_CASE == readState ) UNLIKELY
 										{
 											if (
 												line.find( "break;" ) != std::string::npos ||
@@ -289,8 +303,7 @@ int main( int argc, char *argv[] )
 												line.find( "switch" ) != std::string::npos ||
 												line.find( "fallthrough" ) != std::string::npos )
 											{
-												isReadedCase     = false;
-												isPrevReadedCase = false;
+												readState = READ_STATE::BEFORE_CASE;
 											}
 											else if (
 												WonSY::File::FindString( tokenCont, "case" )     ||
@@ -299,8 +312,7 @@ int main( int argc, char *argv[] )
 												localLogCont.emplace( " Plz Check!!  [ File : " +
 													checkFile.GetFileName() + ", Line : " + std::to_string( checkFile.GetCurLineIndex() ) + " ]" );
 
-												isReadedCase     = false;
-												isPrevReadedCase = false;
+												readState = READ_STATE::BEFORE_CASE;
 											}
 
 											// 마지막 case는 이후 break나 return이 없더라도 큰 문제가 되지 않는다고 판단하였습니다.
@@ -308,8 +320,7 @@ int main( int argc, char *argv[] )
 											{
 												if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
 												{
-													isReadedCase     = false;
-													isPrevReadedCase = false;
+													readState = READ_STATE::BEFORE_CASE;
 												}
 											}
 										}
