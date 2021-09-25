@@ -19,7 +19,7 @@ namespace WonSY
 			const std::function< void() > func;
 		
 		public:
-			AutoCall( std::function< void() > func ) noexcept
+			AutoCall( const std::function< void() >& func ) noexcept
 				: func( func )
 			{
 			}
@@ -27,6 +27,31 @@ namespace WonSY
 			~AutoCall()
 			{
 				if ( func ) { func(); }
+			}
+		};
+
+		class AutoCallList
+		{
+			std::list< std::function< void() > > funcList;
+
+		public:
+			AutoCallList() = default;
+			~AutoCallList()
+			{
+				for ( auto iter = funcList.begin(); iter != funcList.end(); ++iter )
+				{
+					( *iter )();
+				}
+			}
+
+			void Add( const std::function< void() >& func )
+			{
+				funcList.push_back( func );
+			}
+
+			void Clear()
+			{
+				funcList.clear();
 			}
 		};
 	} 

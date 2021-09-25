@@ -90,7 +90,7 @@ namespace WonSY::File
 	using _ValueType = _Type::value_type;
 
 	template< typename _Cont >
-	auto FindAndErase( _Cont& cont, const _ValueType< _Cont >& checkValue ) -> void
+	void FindAndErase( _Cont& cont, const _ValueType< _Cont >& checkValue ) // -> void
 	{
 		for ( int rIndex = cont.size() - 1; rIndex >= 0; --rIndex )
 		{

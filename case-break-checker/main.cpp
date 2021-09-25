@@ -156,9 +156,14 @@ int main( int argc, char *argv[] )
 							bool       isOnComment   = false; // 주석 상태인지 여부 체크
 
 							// Check
-							READ_STATE                                 readState  = READ_STATE::BEFORE_CASE;
+							READ_STATE                                 readState       = READ_STATE::BEFORE_CASE;
+							int                                        prevIfLineIndex = 0; // 이전에 If문이 존재했던 라인
+							int                                        depthLevel      = 0; // 뎁스
 							// int                                        depthLevel = 0; // 뎁스
 							// std::stack< std::pair< READ_STATE, int > > stateCont;      // 이중 Switch문 처리.
+
+							const auto initFunc = [ & ](){ readState = READ_STATE::BEFORE_CASE; prevIfLineIndex = 0; depthLevel = 0; };
+							initFunc();
 
 							while ( 7 )
 							{
@@ -193,7 +198,7 @@ int main( int argc, char *argv[] )
 									std::string deepCopyString = line;
 									WonSY::File::EraseFirstTab( deepCopyString );
 									WonSY::File::Replace( deepCopyString, "\t", " " );
-									const auto tokenCont = WonSY::File::DoTokenize( deepCopyString, ' ' );
+									auto tokenCont = WonSY::File::DoTokenize( deepCopyString, ' ' );
 									WonSY::File::FindAndErase( tokenCont, "" );
 									WonSY::File::FindAndErase( tokenCont, " " );
 
@@ -248,7 +253,7 @@ int main( int argc, char *argv[] )
 												line.find( "fallthrough" ) != std::string::npos ) UNLIKELY
 											{
 												// ex ) case 1: ~~~~~~ break; or case 2: ~~~~~~ return;
-												readState = READ_STATE::BEFORE_CASE;
+												initFunc();
 											}
 
 											if constexpr ( FOR_L2SERVER )
@@ -257,7 +262,7 @@ int main( int argc, char *argv[] )
 												if (
 													line.find( "PROCESS_STAT_VALUE" ) != std::string::npos ) UNLIKELY
 												{
-													readState = READ_STATE::BEFORE_CASE;
+													initFunc();
 												}
 											}
 										}
@@ -279,7 +284,7 @@ int main( int argc, char *argv[] )
 												line.find( "switch" ) != std::string::npos ||
 												line.find( "fallthrough" ) != std::string::npos ) UNLIKELY
 											{
-												readState = READ_STATE::BEFORE_CASE;
+												initFunc();
 											}
 											else
 											{
@@ -289,7 +294,7 @@ int main( int argc, char *argv[] )
 												{
 													if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos ) UNLIKELY
 													{
-														readState == READ_STATE::BEFORE_CASE;
+														initFunc();
 														continue;
 													}
 												}
@@ -297,13 +302,55 @@ int main( int argc, char *argv[] )
 										}
 										else if ( READ_STATE::AFTER_CASE == readState ) UNLIKELY
 										{
+											// 마지막 case는 이후 break나 return이 없더라도 큰 문제가 되지 않는다고 판단하였습니다.
+											if constexpr ( FOR_L2SERVER )
+											{
+												if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
+												{
+													initFunc();
+													continue;
+												}
+											}
+
+											if ( depthLevel )
+											{
+												if ( line.find( "}" ) != std::string::npos )
+												{
+													--depthLevel;
+												}
+											}
+
+											WonSY::AutoCallList autoCallList;
+											if ( prevIfLineIndex )
+											{
+												// 이전 라인에서 if문이 있었다면,
+												if ( prevIfLineIndex + 1 == checkFile.GetCurLineIndex() )
+												{
+													++depthLevel;
+													
+													// 현재 라인에서, ( '{'이 있다면, '}'가 있을 떄 까지, 뎁스 상승 범위가 해당 범위이고, 없을 경우 현재 라인까지이다.
+													if ( line.find( "{" ) != std::string::npos )
+													{
+													}
+													else
+													{
+														autoCallList.Add( [ &depthLevel ](){ --depthLevel; } );
+													}
+												}
+
+												prevIfLineIndex = 0;
+											}
+
 											if (
 												line.find( "break;" ) != std::string::npos ||
 												line.find( "return" ) != std::string::npos ||
 												line.find( "switch" ) != std::string::npos ||
 												line.find( "fallthrough" ) != std::string::npos )
 											{
-												readState = READ_STATE::BEFORE_CASE;
+												if ( !depthLevel )
+												{
+													initFunc();
+												}
 											}
 											else if (
 												WonSY::File::FindString( tokenCont, "case" )     ||
@@ -312,15 +359,15 @@ int main( int argc, char *argv[] )
 												localLogCont.emplace( " Plz Check!!  [ File : " +
 													checkFile.GetFileName() + ", Line : " + std::to_string( checkFile.GetCurLineIndex() ) + " ]" );
 
-												readState = READ_STATE::BEFORE_CASE;
+												initFunc();
 											}
-
-											// 마지막 case는 이후 break나 return이 없더라도 큰 문제가 되지 않는다고 판단하였습니다.
-											if constexpr ( FOR_L2SERVER )
+											else
 											{
-												if ( line.find( "PROCESS_STAT_VALUE" ) != std::string::npos )
+												if ( 
+													line.find( "if" ) != std::string::npos  ||
+													line.find( "else" ) != std::string::npos )
 												{
-													readState = READ_STATE::BEFORE_CASE;
+													prevIfLineIndex = checkFile.GetCurLineIndex();
 												}
 											}
 										}

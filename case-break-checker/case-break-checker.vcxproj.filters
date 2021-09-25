@@ -29,6 +29,9 @@
     <ClCompile Include="WonSY\WonSY_Time.cpp">
       <Filter>WonSY</Filter>
     </ClCompile>
+    <ClCompile Include="test\example.cpp">
+      <Filter>파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="WonSY\WonSY.h">
