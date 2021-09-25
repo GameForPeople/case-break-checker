@@ -364,8 +364,9 @@ int main( int argc, char *argv[] )
 											else
 											{
 												if ( 
-													line.find( "if" ) != std::string::npos  ||
-													line.find( "else" ) != std::string::npos )
+													WonSY::File::FindString( tokenCont, "if" )  ||
+													WonSY::File::FindString( tokenCont, "if(" ) ||
+													WonSY::File::FindString( tokenCont, "else" ) )
 												{
 													prevIfLineIndex = checkFile.GetCurLineIndex();
 												}

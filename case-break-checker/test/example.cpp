@@ -24,5 +24,6 @@ int func()
 		{
 
 		}
+	case 2:
 	}
 }
